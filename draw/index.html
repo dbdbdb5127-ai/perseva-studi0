@@ -106,7 +106,8 @@ aside{background:var(--panel);border-left:1px solid var(--line);display:flex;fle
   <span class="sp"></span>
   <button id="bPrice">부품값</button>
   <button id="bCanvas">캔버스</button>
-  <button id="bSaves">저장함</button>
+  <button id="bClear" style="color:var(--danger)">전체 삭제</button>
+  <button id="bSaves">저장<span id="unsaved" style="display:none;color:var(--danger);margin-left:4px;font-size:11px">● 저장 안 함</span></button>
   <button id="bExport">PNG로 저장</button>
  </header>
  <nav id="tools"></nav>
@@ -119,7 +120,8 @@ aside{background:var(--panel);border-left:1px solid var(--line);display:flex;fle
    <label>굵기 <b id="vSize"></b><input type="range" id="bSize" min="1" max="120"></label>
    <label>진하기 <b id="vOp"></b><input type="range" id="bOp" min="5" max="100"></label>
    <label>손떨림 보정 <b id="vStab"></b><input type="range" id="bStab" min="0" max="90"></label>
-   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bArrow"> 선 끝에 화살표</label>
+   <label style="display:flex;gap:8px;align-items:center" id="rowArrow"><input type="checkbox" id="bArrow"> 선 끝에 화살표</label>
+   <div id="eraseMode" style="margin-top:10px;color:var(--sub);font-size:12px">지우는 대상<div class="seg" style="margin-top:4px"><button data-em="draw">펜 그림 전부</button><button data-em="img">고른 사진</button></div></div>
   </div>
   <div id="zoomUI"><button id="zOut">−</button><span id="zVal">100%</span><button id="zIn">+</button><button id="zFit">맞춤</button></div>
  </main>
@@ -164,7 +166,7 @@ const doc={W:2400,H:1500,bg:'#ffffff',layers:[]};
 let sel=null, tool='select', uid=1, parts=[], partBy={}, imgMode='photo', cat='all';
 const view={s:.5,tx:0,ty:0};
 const brush={color:'#111111',size:6,op:100,stab:40,arrow:true};
-const eraser={size:30};
+const eraser={size:30,mode:'draw'};
 try{Object.assign(brush,JSON.parse(localStorage.getItem('pvd-brush')||'{}'))}catch(e){}
 const L=id=>doc.layers.find(l=>l.id===id);
 const selL=()=>sel?L(sel):null;
@@ -172,7 +174,8 @@ const mk=(w,h)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);
 
 /* ---------- 되돌리기 ---------- */
 const hist=[],fut=[];
-function push(c){hist.push(c);if(hist.length>80)hist.shift();fut.length=0;changed()}
+let dirty=false;function setDirty(v){dirty=v;const u=document.getElementById('unsaved');if(u)u.style.display=v&&doc.layers.length?'':'none'}
+function push(c){setDirty(true);hist.push(c);if(hist.length>80)hist.shift();fut.length=0;changed()}
 const PK=['x','y','k','rot','flip','cap','opacity','visible','locked','name','text','color','size'];
 const props=l=>{const o={};PK.forEach(k=>{if(k in l)o[k]=l[k]});return o};
 function apply(c,dir){
@@ -186,8 +189,8 @@ function apply(c,dir){
  else if(c.t==='canvas'){const s=u?c.b:c.a;doc.W=s.W;doc.H=s.H;doc.bg=s.bg;for(const id in s.cvs){const l=L(+id);if(l){l.cv=s.cvs[id];l.thumbDirty=1}}fit()}
  else if(c.t==='el'){const l=L(c.id);if(l){l.el=u?c.b:c.a;l.thumbDirty=1}}
 }
-function undo(){const c=hist.pop();if(!c)return;apply(c,-1);fut.push(c);changed()}
-function redo(){const c=fut.pop();if(!c)return;apply(c,1);hist.push(c);changed()}
+function undo(){const c=hist.pop();if(!c)return;setDirty(true);apply(c,-1);fut.push(c);changed()}
+function redo(){const c=fut.pop();if(!c)return;setDirty(true);apply(c,1);hist.push(c);changed()}
 $('#bUndo').onclick=undo;$('#bRedo').onclick=redo;
 
 /* ---------- 레이어 만들기 ---------- */
@@ -314,8 +317,9 @@ $('#bSize').oninput=e=>{if(tool==='eraser')eraser.size=+e.target.value;else brus
 $('#bOp').oninput=e=>{brush.op=+e.target.value;syncBrushUI();saveBrush()};
 $('#bStab').oninput=e=>{brush.stab=+e.target.value;syncBrushUI();saveBrush()};
 $('#bArrow').onchange=e=>{brush.arrow=e.target.checked;saveBrush()};
+$$('#eraseMode [data-em]').forEach(b=>b.onclick=()=>{eraser.mode=b.dataset.em;syncBrushUI();if(eraser.mode==='img'&&!(selL()&&selL().type==='image'))toast('지울 사진을 레이어 창에서 골라줘')});
 function saveBrush(){try{localStorage.setItem('pvd-brush',JSON.stringify(brush))}catch(e){}}
-function syncBrushUI(){const sz=tool==='eraser'?eraser.size:brush.size;$('#bSize').value=sz;$('#vSize').textContent=sz+'px';$('#bOp').value=brush.op;$('#vOp').textContent=brush.op+'%';$('#bStab').value=brush.stab;$('#vStab').textContent=brush.stab;$('#bColor').value=brush.color;$('#bArrow').checked=brush.arrow;$('#colorDot').style.background=brush.color;$$('#swatch i').forEach(i=>i.classList.toggle('on',i.dataset.c===brush.color))}
+function syncBrushUI(){const er=tool==='eraser';$('#eraseMode').style.display=er?'':'none';['#swatch','#rowArrow'].forEach(q=>$(q).style.display=er?'none':'');$$('#eraseMode [data-em]').forEach(b=>b.classList.toggle('on',b.dataset.em===eraser.mode));const sz=tool==='eraser'?eraser.size:brush.size;$('#bSize').value=sz;$('#vSize').textContent=sz+'px';$('#bOp').value=brush.op;$('#vOp').textContent=brush.op+'%';$('#bStab').value=brush.stab;$('#vStab').textContent=brush.stab;$('#bColor').value=brush.color;$('#bArrow').checked=brush.arrow;$('#colorDot').style.background=brush.color;$$('#swatch i').forEach(i=>i.classList.toggle('on',i.dataset.c===brush.color))}
 
 /* ---------- 포인터 ---------- */
 const pts=new Map();let act=null,space=false,hoverCursor=null;
@@ -389,13 +393,20 @@ function drawTarget(){
 }
 function startStroke(e,s,d){
  if(tool==='eraser'){
-  const t=selL();
-  if(!t||t.type==='text'){toast('지울 레이어(그림이나 사진)를 먼저 골라줘');return}
-  if(t.locked){toast('잠긴 레이어야');return}
-  if(t.type==='image'&&!(t.el instanceof HTMLCanvasElement)){const c=mk(t.w,t.h);c.getContext('2d').drawImage(t.el,0,0);push({t:'el',id:t.id,b:t.el,a:c});t.el=c}
-  const tg=t.type==='image'?'el':'cv',cnv=t[tg];
-  snap=mk(cnv.width,cnv.height);snap.getContext('2d').drawImage(cnv,0,0);
-  stroke={id:t.id,tg,l:t,erase:true,w:eraser.size,pts:[],box:[1e9,1e9,-1e9,-1e9],cursor:s};
+  let tg;
+  if(eraser.mode==='img'){
+   const t=selL();
+   if(!t||t.type!=='image'){toast('지울 사진을 먼저 골라줘 (펜 그림을 지우려면 "펜 그림 전부")');return}
+   if(t.locked){toast('잠긴 레이어야');return}
+   if(!t.visible){toast('숨긴 레이어야');return}
+   if(!(t.el instanceof HTMLCanvasElement)){const c=mk(t.w,t.h);c.getContext('2d').drawImage(t.el,0,0);push({t:'el',id:t.id,b:t.el,a:c});t.el=c}
+   tg=[{l:t,tg:'el'}];
+  }else{
+   tg=doc.layers.filter(l=>l.type==='draw'&&l.visible&&!l.locked).map(l=>({l,tg:'cv'}));
+   if(!tg.length){toast('지울 펜 그림이 없어. 사진을 지우려면 지우개를 한 번 더 눌러 "고른 사진"으로 바꿔');return}
+  }
+  tg.forEach(o=>{const cnv=o.l[o.tg];o.snap=mk(cnv.width,cnv.height);o.snap.getContext('2d').drawImage(cnv,0,0)});
+  stroke={id:-1,targets:tg,l:tg[0].l,tg:tg[0].tg,erase:true,w:eraser.size,pts:[],box:[1e9,1e9,-1e9,-1e9],cursor:s};
  }else{
   const t=drawTarget();if(!t)return;
   const buf=keepBuf&&keepBuf.width===doc.W&&keepBuf.height===doc.H?keepBuf:(keepBuf=mk(doc.W,doc.H));
@@ -411,7 +422,7 @@ function grow(x,y,r){const b=stroke.box;b[0]=Math.min(b[0],x-r);b[1]=Math.min(b[
 function moveStroke(d,pr,ptype,first){
  if(!stroke)return;
  const p=localPt(d);
- const wp=ptype==='pen'?(.25+.95*(pr||.5)):1;
+ const wp=ptype==='pen'&&!stroke.erase?(.25+.95*(pr||.5)):1;
  const w=stroke.w*p.sc*wp;
  if(stroke.line){
   const c=stroke.buf.getContext('2d');c.clearRect(0,0,c.canvas.width,c.canvas.height);
@@ -423,16 +434,18 @@ function moveStroke(d,pr,ptype,first){
  }
  const last=stroke.pts[stroke.pts.length-1];
  let q=p;
- if(last){const k=brush.stab/100*.9;q={x:last.x+(p.x-last.x)*(1-k),y:last.y+(p.y-last.y)*(1-k)}}
- const c=stroke.erase?stroke.l[stroke.tg].getContext('2d'):stroke.buf.getContext('2d');
+ if(last&&!stroke.erase){const k=brush.stab/100*.9;q={x:last.x+(p.x-last.x)*(1-k),y:last.y+(p.y-last.y)*(1-k)}}
+ const cs=stroke.erase?stroke.targets.map(o=>o.l[o.tg].getContext('2d')):[stroke.buf.getContext('2d')];
+ for(const c of cs){
  c.save();
  if(stroke.erase){c.globalCompositeOperation='destination-out';c.strokeStyle='#000';c.fillStyle='#000'}else{c.strokeStyle=brush.color;c.fillStyle=brush.color}
  c.lineCap='round';c.lineJoin='round';
  if(!last){c.beginPath();c.arc(q.x,q.y,w/2,0,7);c.fill()}
  else{c.lineWidth=w;c.beginPath();c.moveTo(last.x,last.y);c.lineTo(q.x,q.y);c.stroke()}
  c.restore();
+ }
  grow(q.x,q.y,w/2+2);stroke.pts.push(q);
- if(stroke.erase)stroke.l.thumbDirty=1;
+ if(stroke.erase)stroke.targets.forEach(o=>o.l.thumbDirty=1);
 }
 function clampBox(b,W,H){const x=Math.max(0,Math.floor(b[0])),y=Math.max(0,Math.floor(b[1])),x2=Math.min(W,Math.ceil(b[2])),y2=Math.min(H,Math.ceil(b[3]));return x2>x&&y2>y?[x,y,x2-x,y2-y]:null}
 function endStroke(){
@@ -440,13 +453,13 @@ function endStroke(){
  const l=st.l,cnv=l[st.tg],c=cnv.getContext('2d');
  const r=clampBox(st.box,cnv.width,cnv.height);
  if(r){
-  if(st.erase){const b=snap.getContext('2d').getImageData(...r);push({t:'pix',id:l.id,tg:st.tg,r,b,a:c.getImageData(...r)})}
+  if(st.erase){const list=st.targets.map(o=>{const x=o.l[o.tg].getContext('2d');return{t:'pix',id:o.l.id,tg:o.tg,r,b:o.snap.getContext('2d').getImageData(...r),a:x.getImageData(...r)}});push(list.length===1?list[0]:{t:'multi',list})}
   else{const b=c.getImageData(...r);c.save();c.globalAlpha=st.op;c.drawImage(st.buf,r[0],r[1],r[2],r[3],r[0],r[1],r[2],r[3]);c.restore();push({t:'pix',id:l.id,tg:'cv',r,b,a:c.getImageData(...r)})}
  }
  snap=null;st.buf&&st.buf.getContext('2d').clearRect(0,0,st.buf.width,st.buf.height);
  l.thumbDirty=1;refreshLayers();redraw();
 }
-function cancelStroke(){const st=stroke;if(!st)return;if(st.erase&&snap){const c=st.l[st.tg].getContext('2d');c.save();c.globalCompositeOperation='copy';c.drawImage(snap,0,0);c.restore()}stroke=null;snap=null;act=null;redraw()}
+function cancelStroke(){const st=stroke;if(!st)return;if(st.erase)st.targets.forEach(o=>{const c=o.l[o.tg].getContext('2d');c.save();c.globalCompositeOperation='copy';c.drawImage(o.snap,0,0);c.restore()});stroke=null;snap=null;act=null;redraw()}
 
 /* ---------- 글자 ---------- */
 function newText(d){openTextSheet({text:'',color:brush.color==='#ffffff'?'#111111':brush.color,size:Math.round(Math.max(24,doc.W*.03))},v=>{if(!v.text.trim())return;const l={id:uid++,type:'text',name:'글자: '+v.text.split('\n')[0].slice(0,14),visible:true,opacity:1,locked:false,text:v.text,color:v.color,size:v.size,x:d.x,y:d.y,k:1,rot:0,flip:1,thumbDirty:1};addLayer(l,doc.layers.length);setTool('select')})}
@@ -604,7 +617,7 @@ function canvasSheet(){
  <div class="btns"><button id="cNew" style="color:var(--danger)">새 작업 (전부 비우기)</button><button id="cClose">닫기</button></div>`);
  $$('#sheet [data-w]').forEach(b=>b.onclick=()=>{setCanvas(+b.dataset.w,+b.dataset.h,doc.bg);canvasSheet()});
  $$('#sheet [data-bg]').forEach(b=>b.onclick=()=>{setCanvas(doc.W,doc.H,b.dataset.bg);canvasSheet()});
- $('#cNew').onclick=()=>{const list=[...doc.layers].reverse().map(l=>({t:'del',l,i:doc.layers.indexOf(l)}));list.forEach(c=>doc.layers.splice(doc.layers.indexOf(c.l),1));sel=null;if(list.length)push({t:'multi',list});closeSheet();toast('비웠어. 되돌리기로 살릴 수 있어')};
+ $('#cNew').onclick=()=>askUnsaved('새 작업을 시작하면 지금 그림은 지워져.',clearAll);
  $('#cClose').onclick=closeSheet;
 }
 function setCanvas(W,H,bg){
@@ -651,17 +664,30 @@ async function deserialize(s){
 }
 let saveT,saving=false;
 function changed(){refreshLayers();renderCtx();redraw();clearTimeout(saveT);saveT=setTimeout(autosave,1200)}
-async function autosave(){if(saving){saveT=setTimeout(autosave,800);return}saving=true;try{await kv('put','current',await serialize())}catch(e){}saving=false}
+async function autosave(){if(saving){saveT=setTimeout(autosave,800);return}saving=true;try{await kv('put','current',{...await serialize(),dirty})}catch(e){}saving=false}
+addEventListener('beforeunload',e=>{if(dirty&&doc.layers.length){e.preventDefault();e.returnValue=''}});
+// 저장 안 한 작업이 있으면 먼저 물어본다
+function askUnsaved(msg,go){
+ if(!dirty||!doc.layers.length){go();return}
+ sheet(`<h3>저장 안 한 작업이 있어</h3><p style="color:var(--sub);font-size:13px;margin:0">${msg} 지금 그림은 저장함에 아직 안 들어가 있어.</p><div class="btns"><button class="on" id="uSave">먼저 저장하기</button><button id="uGo" style="color:var(--danger)">저장 안 하고 계속</button><button id="uNo">취소</button></div>`);
+ $('#uSave').onclick=()=>savesSheet();$('#uGo').onclick=()=>{closeSheet();go()};$('#uNo').onclick=closeSheet;
+}
+function clearAll(){const list=[...doc.layers].reverse().map(l=>({t:'del',l,i:doc.layers.indexOf(l)}));list.forEach(c=>doc.layers.splice(doc.layers.indexOf(c.l),1));sel=null;if(list.length)push({t:'multi',list});setDirty(false);closeSheet();toast('전부 지웠어. 되돌리기(↶)로 살릴 수 있어',2600)}
+$('#bClear').onclick=()=>{
+ if(!doc.layers.length){toast('지울 게 없어');return}
+ sheet(`<h3>전체 삭제</h3><p style="color:var(--sub);font-size:13px;margin:0">판 위의 사진·그림·글자 ${doc.layers.length}개를 전부 지울까?${dirty?' <b style="color:var(--danger)">지금 작업은 저장함에 저장 안 돼 있어.</b>':''} 지운 바로 뒤엔 되돌리기(↶)로 살릴 수 있어.</p><div class="btns">${dirty?'<button class="on" id="xSave">먼저 저장하기</button>':''}<button id="xGo" style="color:var(--danger)">전부 지우기</button><button id="xNo">취소</button></div>`);
+ dirty&&($('#xSave').onclick=()=>savesSheet());$('#xGo').onclick=clearAll;$('#xNo').onclick=closeSheet;
+};
 function smallThumb(){const s=Math.min(160/doc.W,160/doc.H),c=mk(Math.round(doc.W*s),Math.round(doc.H*s)),x=c.getContext('2d');x.scale(s,s);paintDoc(x,true);return c.toDataURL('image/jpeg',.7)}
 $('#bSaves').onclick=savesSheet;
 async function savesSheet(){
  let list=[];try{list=(await kv('get','list'))||[]}catch(e){}
- sheet(`<h3>저장함</h3><p style="color:var(--sub);font-size:12px;margin:0 0 8px">지금 작업은 자동으로 이 기기에 저장돼. 여러 시안을 따로 남기고 싶으면 이름 붙여서 저장해. (이 기기·이 브라우저에만 남아)</p>
+ sheet(`<h3>저장</h3><p style="font-size:13px;margin:0 0 6px"><b>이름 쓰고 [저장] 버튼을 눌러야</b> 아래 목록에 들어가.</p><p style="color:var(--sub);font-size:12px;margin:0 0 8px">안 누르면 목록엔 안 남아. (창을 닫았다 열면 마지막 화면은 임시로 다시 뜨지만, 다른 걸 열거나 지우면 사라져.) 이 기기·이 브라우저에만 저장돼.</p>
  <div style="display:flex;gap:6px"><input type="text" id="sn" placeholder="예) 목걸이 A 꼬리 비교"><button class="on" id="ss">저장</button></div>
  <div class="list" style="margin-top:8px">${list.map(w=>`<div><img src="${w.thumb}"><div style="flex:1"><b>${esc(w.name)}</b><div style="color:var(--sub);font-size:11px">${new Date(w.time).toLocaleString('ko-KR')}</div></div><button data-o="${w.id}">열기</button><button data-x="${w.id}" style="color:var(--danger)">삭제</button></div>`).join('')||'<div style="color:var(--sub)">저장한 시안이 없어</div>'}</div><div class="btns"><button id="sc">닫기</button></div>`);
  $('#sc').onclick=closeSheet;
- $('#ss').onclick=async()=>{const name=$('#sn').value.trim()||('시안 '+(list.length+1));const id=Date.now();try{await kv('put','w:'+id,await serialize());list.unshift({id,name,time:id,thumb:smallThumb()});await kv('put','list',list);toast('저장했어');savesSheet()}catch(e){toast('저장 실패: 저장 공간이 모자랄 수 있어')}};
- $$('#sheet [data-o]').forEach(b=>b.onclick=async()=>{const s=await kv('get','w:'+b.dataset.o);if(s){await deserialize(s);closeSheet();toast('불러왔어');autosave()}});
+ $('#ss').onclick=async()=>{const name=$('#sn').value.trim()||('시안 '+(list.length+1));const id=Date.now();try{await kv('put','w:'+id,await serialize());list.unshift({id,name,time:id,thumb:smallThumb()});await kv('put','list',list);setDirty(false);autosave();toast('저장함에 넣었어');savesSheet()}catch(e){toast('저장 실패: 저장 공간이 모자랄 수 있어')}};
+ $$('#sheet [data-o]').forEach(b=>b.onclick=()=>askUnsaved('다른 시안을 열면 지금 그림은 사라져.',async()=>{const s=await kv('get','w:'+b.dataset.o);if(s){await deserialize(s);setDirty(false);closeSheet();toast('불러왔어');autosave()}}));
  $$('#sheet [data-x]').forEach(b=>b.onclick=async()=>{await kv('del','w:'+b.dataset.x);list=list.filter(w=>w.id!=b.dataset.x);await kv('put','list',list);savesSheet()});
 }
 
@@ -695,7 +721,7 @@ addEventListener('paste',async e=>{for(const it of e.clipboardData.items)if(it.t
 setTool('select');syncBrushUI();
 fetch('bundle.json').then(r=>r.ok?r.json():null).catch(()=>null).then(b=>{ASSET=b;return fetch('parts.json')}).then(r=>r.json()).then(async j=>{
  parts=j;parts.forEach(p=>partBy[p.no]=p);renderGrid();
- try{const s=await kv('get','current');if(s&&s.layers&&s.layers.length){await deserialize(s);toast('하던 작업 불러왔어')}else toast('부품 사진을 누르면 레이어로 들어가',2600)}catch(e){toast('부품 사진을 누르면 레이어로 들어가',2600)}
+ try{const s=await kv('get','current');if(s&&s.layers&&s.layers.length){await deserialize(s);setDirty(!!s.dirty);toast(s.dirty?'하던 작업 불러왔어 (저장함엔 아직 저장 안 됨)':'하던 작업 불러왔어',2600)}else toast('부품 사진을 누르면 레이어로 들어가',2600)}catch(e){toast('부품 사진을 누르면 레이어로 들어가',2600)}
  renderLayers();
 }).catch(()=>toast('부품 목록을 못 불러왔어'));
 requestAnimationFrame(frame);
