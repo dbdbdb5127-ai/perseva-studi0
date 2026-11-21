@@ -192,8 +192,9 @@ $('#bUndo').onclick=undo;$('#bRedo').onclick=redo;
 /* ---------- 레이어 만들기 ---------- */
 function newDraw(name){return{id:uid++,type:'draw',name:name||('그림 '+(doc.layers.filter(l=>l.type==='draw').length+1)),visible:true,opacity:1,locked:false,cv:mk(doc.W,doc.H),thumbDirty:1}}
 function addLayer(l,i){if(i==null){const s=selL();i=s?doc.layers.indexOf(s)+1:doc.layers.length}doc.layers.splice(i,0,l);sel=l.id;push({t:'add',l,i});return l}
+let ASSET=null;const A=u=>ASSET&&ASSET[u]||u;
 const imgCache={};
-function loadImg(url){if(imgCache[url])return imgCache[url];return imgCache[url]=new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>{delete imgCache[url];rej(new Error(url))};i.src=url})}
+function loadImg(url){if(imgCache[url])return imgCache[url];return imgCache[url]=new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>{delete imgCache[url];rej(new Error(url))};i.src=A(url)})}
 function viewCenter(){const r=stage.getBoundingClientRect();return toDoc(r.width/2,r.height/2)}
 async function addPart(p,mode){
  const useCut=mode==='cut'&&p.img;
@@ -549,13 +550,13 @@ $('#q').oninput=()=>renderGrid();
 function renderGrid(){
  const q=$('#q').value.trim().toLowerCase();
  const list=parts.filter(p=>(cat==='all'||p.g===cat)&&(!q||(p.no+' '+p.name+' '+p.vendor+' '+p.cat+' '+(p.tags||[]).join(' ')).toLowerCase().includes(q)));
- $('#grid').innerHTML=list.map(p=>{const im=imgMode==='cut'&&p.img?p.img:p.thumb;return`<div class="card" data-no="${p.no}"><img loading="lazy" src="${im}" alt="" style="${imgMode==='cut'&&p.img?'object-fit:contain;background:#f4f4f4':''}"><button class="inf" data-i="${p.no}" title="정보">i</button><span class="used" hidden></span><div class="t"><b>#${p.no}</b> ${won(p.price)}<div>${esc(p.name)}</div></div></div>`}).join('')||'<div style="color:var(--sub);padding:12px">찾는 부품이 없어</div>';
+ $('#grid').innerHTML=list.map(p=>{const im=imgMode==='cut'&&p.img?p.img:p.thumb;return`<div class="card" data-no="${p.no}"><img loading="lazy" src="${A(im)}" alt="" style="${imgMode==='cut'&&p.img?'object-fit:contain;background:#f4f4f4':''}"><button class="inf" data-i="${p.no}" title="정보">i</button><span class="used" hidden></span><div class="t"><b>#${p.no}</b> ${won(p.price)}<div>${esc(p.name)}</div></div></div>`}).join('')||'<div style="color:var(--sub);padding:12px">찾는 부품이 없어</div>';
  $$('#grid .card').forEach(c=>c.onclick=e=>{const p=partBy[c.dataset.no];if(e.target.closest('.inf')){showInfo(p);return}addPart(p,imgMode)});
  markUsed();
 }
 function markUsed(){const cnt={};doc.layers.forEach(l=>{if(l.src&&l.src.kind==='part')cnt[l.src.no]=(cnt[l.src.no]||0)+1});$$('#grid .card').forEach(c=>{const u=c.querySelector('.used'),n=cnt[c.dataset.no];u.hidden=!n;if(n)u.textContent='사용 '+n})}
 function showInfo(p){
- sheet(`<h3>#${p.no} ${esc(p.name)}</h3><img src="photo/${p.no}.webp" style="width:100%;border-radius:10px;background:#fff;margin-bottom:10px">
+ sheet(`<h3>#${p.no} ${esc(p.name)}</h3><img src="${A('photo/'+p.no+'.webp')}" style="width:100%;border-radius:10px;background:#fff;margin-bottom:10px">
  <div class="kv"><span>분류</span><div>${esc(p.cat)}</div><span>업체</span><div>${esc(p.vendor)}</div><span>가격</span><div>${won(p.price)} ${esc(p.unit||'')}</div><span>사이즈</span><div>${esc(p.size||'-')}</div><span>재질</span><div>${esc(p.mat||'-')}</div><span>톤</span><div>${esc(p.tone||'-')}</div>${p.tags&&p.tags.length?`<span>메모</span><div>${esc(p.tags.join(', '))}</div>`:''}</div>
  <div class="btns"><button class="on" id="iAdd">사진 넣기</button>${p.img?'<button id="iCut">배경 뺀 부품 넣기</button>':''}${p.link?`<button id="iLink">상품 페이지</button>`:''}<button id="iClose">닫기</button></div>`);
  $('#iAdd').onclick=()=>{closeSheet();addPart(p,'photo')};if(p.img)$('#iCut').onclick=()=>{closeSheet();addPart(p,'cut')};
@@ -580,7 +581,7 @@ $('#bPrice').onclick=()=>{
  const cnt={};doc.layers.forEach(l=>{if(l.visible&&l.src&&l.src.kind==='part')cnt[l.src.no]=(cnt[l.src.no]||0)+1});
  const rows=Object.keys(cnt).map(no=>{const p=partBy[no];return{p,n:cnt[no]}});
  let sum=0,miss=0;rows.forEach(r=>{if(r.p.price==null)miss++;else sum+=r.p.price*r.n});
- sheet(`<h3>지금 판에 올린 부품값</h3>${rows.length?`<div class="list">${rows.map(r=>`<div><img src="${r.p.thumb}"><div style="flex:1"><b>#${r.p.no}</b> ${esc(r.p.name)}<div style="color:var(--sub);font-size:12px">${won(r.p.price)} / ${esc(r.p.unit||'')} × ${r.n}</div></div></div>`).join('')}</div>
+ sheet(`<h3>지금 판에 올린 부품값</h3>${rows.length?`<div class="list">${rows.map(r=>`<div><img src="${A(r.p.thumb)}"><div style="flex:1"><b>#${r.p.no}</b> ${esc(r.p.name)}<div style="color:var(--sub);font-size:12px">${won(r.p.price)} / ${esc(r.p.unit||'')} × ${r.n}</div></div></div>`).join('')}</div>
  <p style="margin:12px 0 0;font-size:15px">합계 <b>${won(sum)}</b>${miss?` <span style="color:var(--sub);font-size:12px">(가격 없는 ${miss}개 빠짐)</span>`:''}</p>
  <p style="color:var(--sub);font-size:12px;margin:6px 0 0">사진 레이어 1장 = 1단위로 셌어. 체인은 1m·묶음 가격 그대로라 실제 쓰는 길이 값이랑 달라. 숨긴 레이어는 안 셈.</p>`:'<p style="color:var(--sub)">아직 올린 부품 사진이 없어.</p>'}<div class="btns"><button id="pc">닫기</button></div>`);
  $('#pc').onclick=closeSheet;
@@ -685,7 +686,7 @@ stage.addEventListener('dragover',e=>e.preventDefault());
 stage.addEventListener('drop',async e=>{e.preventDefault();for(const f of e.dataTransfer.files)if(f.type.startsWith('image/'))await addOwnImage(f)});
 addEventListener('paste',async e=>{for(const it of e.clipboardData.items)if(it.type.startsWith('image/'))await addOwnImage(it.getAsFile())});
 setTool('select');syncBrushUI();
-fetch('parts.json').then(r=>r.json()).then(async j=>{
+fetch('bundle.json').then(r=>r.ok?r.json():null).catch(()=>null).then(b=>{ASSET=b;return fetch('parts.json')}).then(r=>r.json()).then(async j=>{
  parts=j;parts.forEach(p=>partBy[p.no]=p);renderGrid();
  try{const s=await kv('get','current');if(s&&s.layers&&s.layers.length){await deserialize(s);toast('하던 작업 불러왔어')}else toast('부품 사진을 누르면 레이어로 들어가',2600)}catch(e){toast('부품 사진을 누르면 레이어로 들어가',2600)}
  renderLayers();
