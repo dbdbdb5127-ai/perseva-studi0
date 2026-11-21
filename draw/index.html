@@ -130,6 +130,7 @@ aside{background:var(--panel);border-left:1px solid var(--line);display:flex;fle
     <input type="search" id="q" placeholder="이름·번호·업체 검색">
     <div class="chips" id="cats"></div>
     <div class="seg"><button data-m="photo" class="on">사진 그대로</button><button data-m="cut">배경 뺀 부품</button></div>
+    <label style="display:flex;gap:6px;align-items:center;color:var(--sub);font-size:12px"><input type="checkbox" id="capOn"> 넣을 때 제품명 같이 넣기</label>
    </div>
    <div id="grid"></div>
   </div>
@@ -172,7 +173,7 @@ const mk=(w,h)=>{const c=document.createElement('canvas');c.width=Math.max(1,w);
 /* ---------- 되돌리기 ---------- */
 const hist=[],fut=[];
 function push(c){hist.push(c);if(hist.length>80)hist.shift();fut.length=0;changed()}
-const PK=['x','y','k','rot','flip','opacity','visible','locked','name','text','color','size'];
+const PK=['x','y','k','rot','flip','cap','opacity','visible','locked','name','text','color','size'];
 const props=l=>{const o={};PK.forEach(k=>{if(k in l)o[k]=l[k]});return o};
 function apply(c,dir){
  const u=dir<0;
@@ -204,7 +205,7 @@ async function addPart(p,mode){
  const c=viewCenter(),vis=Math.min(stage.clientWidth,stage.clientHeight)/view.s;
  const k=Math.min(doc.W,vis)*.34/Math.max(el.width,el.height);
  const n=doc.layers.filter(l=>l.src&&l.src.no===p.no).length;
- const l={id:uid++,type:'image',name:'#'+p.no+' '+p.name,visible:true,opacity:1,locked:false,src,el,w:el.width,h:el.height,x:c.x+n*24,y:c.y+n*24,k,rot:0,flip:1,thumbDirty:1};
+ const l={id:uid++,type:'image',name:'#'+p.no+' '+p.name,visible:true,opacity:1,locked:false,src,el,w:el.width,h:el.height,x:c.x+n*24,y:c.y+n*24,k,rot:0,flip:1,cap:capOn,thumbDirty:1};
  addLayer(l,doc.layers.length);setTool('select');
  if(isDrawer())closeDrawer();
 }
@@ -236,7 +237,11 @@ function drawLayer(c,l){
  if(l.type==='draw'){c.drawImage(l.cv,0,0);if(stroke&&stroke.id===l.id&&stroke.buf){c.globalAlpha=l.opacity*stroke.op;c.drawImage(stroke.buf,0,0)}}
  else{
   c.translate(l.x,l.y);c.rotate(l.rot);c.scale(l.k*l.flip,l.k);
-  if(l.type==='image')c.drawImage(l.el,-l.w/2,-l.h/2);
+  if(l.type==='image'){c.drawImage(l.el,-l.w/2,-l.h/2);
+   const p=l.cap&&l.src&&l.src.kind==='part'?partBy[l.src.no]:null;
+   if(p){c.scale(l.flip,1);const fs=Math.max(l.w,l.h)*.075,dark=doc.bg==='#202124';c.textAlign='center';c.textBaseline='top';
+    c.font=`600 ${fs}px ${FONT}`;c.fillStyle=dark?'#eeeeee':'#222222';c.fillText('#'+p.no+' '+p.name,0,l.h/2+fs*.4);
+    c.font=`400 ${fs*.8}px ${FONT}`;c.fillStyle=dark?'#aaaaaa':'#666666';c.fillText(won(p.price)+(p.unit?' / '+p.unit.replace(/\s*\(.*\)/,''):''),0,l.h/2+fs*1.75)}}
   else{const b=textBox(l);c.font=`600 ${l.size}px ${FONT}`;c.fillStyle=l.color;c.textBaseline='top';if(l.flip<0)c.scale(-1,1);b.lines.forEach((s,i)=>c.fillText(s,-b.w/2+l.size*.2,-b.h/2+l.size*.1+i*l.size*1.3))}
  }
  c.restore();
@@ -465,7 +470,7 @@ function renderCtx(light){
  el.innerHTML=`<span class="nm">${esc(l.name)}</span>`+
   (l.type!=='draw'?`<button data-a="small">작게</button><button data-a="big">크게</button><button data-a="rotl">↺</button><button data-a="rotr">↻</button><button data-a="flip">좌우반전</button>`:'')+
   `<button data-a="front">맨 앞</button><button data-a="dup">복제</button>`+
-  (part?`<button data-a="label">이름표</button><button data-a="info">정보</button>`:'')+
+  (part?`<button data-a="cap">${l.cap?'제품명 숨기기':'제품명 보이기'}</button><button data-a="info">정보</button>`:'')+
   (l.type==='text'?`<button data-a="edit">고치기</button>`:'')+
   `<button data-a="lock">${l.locked?'잠금 풀기':'잠그기'}</button><button data-a="del" style="color:var(--danger)">삭제</button>`;
  el.classList.add('show');
@@ -483,9 +488,9 @@ function ctxAct(a){
  if(a==='dup')dupLayer(l);
  if(a==='del')delLayer(l);
  if(a==='lock')propChange(l,()=>l.locked=!l.locked);
+ if(a==='cap')propChange(l,()=>l.cap=!l.cap);
  if(a==='edit')editText(l);
  if(a==='info')showInfo(partBy[l.src.no]);
- if(a==='label'){const p=partBy[l.src.no];const[w,h]=dims(l);const size=Math.round(Math.max(18,h*l.k*.09));const t={id:uid++,type:'text',name:'이름표 #'+p.no,visible:true,opacity:1,locked:false,text:`#${p.no} ${p.name}\n${won(p.price)}${p.unit?' / '+p.unit.replace(/\s*\(.*\)/,''):''}`,color:'#222222',size,x:l.x,y:l.y+h*l.k/2+size*1.6,k:1,rot:0,flip:1,thumbDirty:1};addLayer(t,doc.layers.indexOf(l)+1)}
  renderCtx();refreshLayers();redraw();
 }
 function cloneLayer(l){const n={...l,id:uid++,name:l.name+' 복사',thumbDirty:1};if(l.type==='draw'){n.cv=mk(l.cv.width,l.cv.height);n.cv.getContext('2d').drawImage(l.cv,0,0)}if(l.type==='image'&&l.el instanceof HTMLCanvasElement){n.el=mk(l.el.width,l.el.height);n.el.getContext('2d').drawImage(l.el,0,0)}if(n.x!=null&&l.type!=='draw'){n.x+=30/view.s*.5+20;n.y+=20}delete n._thumb;return n}
@@ -547,6 +552,8 @@ $$('#cats [data-c]').forEach(b=>b.onclick=()=>{cat=b.dataset.c;$$('#cats [data-c
 $('#addOwn').onclick=()=>$('#file').click();
 $$('.seg button').forEach(b=>b.onclick=()=>{imgMode=b.dataset.m;$$('.seg button').forEach(x=>x.classList.toggle('on',x===b));renderGrid()});
 $('#q').oninput=()=>renderGrid();
+let capOn=true;try{capOn=localStorage.getItem('pvd-cap')!=='0'}catch(e){}
+$('#capOn').checked=capOn;$('#capOn').onchange=e=>{capOn=e.target.checked;try{localStorage.setItem('pvd-cap',capOn?'1':'0')}catch(x){}};
 function renderGrid(){
  const q=$('#q').value.trim().toLowerCase();
  const list=parts.filter(p=>(cat==='all'||p.g===cat)&&(!q||(p.no+' '+p.name+' '+p.vendor+' '+p.cat+' '+(p.tags||[]).join(' ')).toLowerCase().includes(q)));
