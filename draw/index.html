@@ -562,7 +562,7 @@ $('#lMerge').onclick=()=>{
 };
 
 /* ---------- 부품 목록 ---------- */
-const CATS=[['all','전체'],['chain','체인'],['pendant','펜던트'],['finding','잠금·연결']];
+const CATS=[['all','전체'],['chain','체인'],['pendant','펜던트'],['finding','잠금·연결'],['bead','비즈·볼']];
 $('#cats').innerHTML=CATS.map(([k,t])=>`<button data-c="${k}" class="${k==='all'?'on':''}">${t}</button>`).join('')+'<button id="addOwn">+ 내 사진</button>';
 $$('#cats [data-c]').forEach(b=>b.onclick=()=>{cat=b.dataset.c;$$('#cats [data-c]').forEach(x=>x.classList.toggle('on',x===b));renderGrid()});
 $('#addOwn').onclick=()=>$('#file').click();
