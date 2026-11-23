@@ -568,8 +568,8 @@ $$('#cats [data-c]').forEach(b=>b.onclick=()=>{cat=b.dataset.c;$$('#cats [data-c
 $('#addOwn').onclick=()=>$('#file').click();
 $$('.seg button').forEach(b=>b.onclick=()=>{imgMode=b.dataset.m;$$('.seg button').forEach(x=>x.classList.toggle('on',x===b));renderGrid()});
 $('#q').oninput=()=>renderGrid();
-let capOn=true;try{capOn=localStorage.getItem('pvd-cap')!=='0'}catch(e){}
-$('#capOn').checked=capOn;$('#capOn').onchange=e=>{capOn=e.target.checked;try{localStorage.setItem('pvd-cap',capOn?'1':'0')}catch(x){}};
+let capOn=true;try{localStorage.removeItem('pvd-cap')}catch(e){}
+$('#capOn').checked=capOn;$('#capOn').onchange=e=>{capOn=e.target.checked};
 function renderGrid(){
  const q=$('#q').value.trim().toLowerCase();
  const list=parts.filter(p=>(cat==='all'||p.g===cat)&&(!q||(p.no+' '+p.name+' '+p.vendor+' '+p.cat+' '+(p.tags||[]).join(' ')).toLowerCase().includes(q)));
